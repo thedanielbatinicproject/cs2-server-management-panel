@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    expose:
+      - "3001"
+    environment:
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-change-me-to-a-secure-random-string}
+      - SUPERUSER_USERNAME=${SUPERUSER_USERNAME:-superadmin}
+      - SUPERUSER_PASSWORD=${SUPERUSER_PASSWORD:-superadmin123}
+    volumes:
+      - backend-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:
