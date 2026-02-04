@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Navbar, Nav, Button, Alert, Spinner, NavDropdown } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import ServerList from './ServerList';
 import MapManager from './MapManager';
 import PromptManager from './PromptManager';
 import CommandConsole from './CommandConsole';
+import ServerStats from './ServerStats';
 import { servers as serversApi } from '../api';
-import { BulkResult } from '../types';
+import { BulkResult, Server } from '../types';
 import { useAuth } from '../App';
 
 interface ActionResult {
@@ -21,8 +22,20 @@ const Dashboard: React.FC = () => {
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [actionResult, setActionResult] = useState<ActionResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [serverList, setServerList] = useState<Server[]>([]);
 
   const canAccessUserManager = user && (user.role === 'superadmin' || user.role === 'admin' || user.isSuperuser);
+
+  // Load servers for the stats component
+  useEffect(() => {
+    const loadServers = async () => {
+      try {
+        const res = await serversApi.list();
+        setServerList(res.data);
+      } catch (e) {}
+    };
+    loadServers();
+  }, []);
 
   const handleChangeMap = async (mapName: string, workshopId: string | null, serverCommands: string[]) => {
     setLoading(true);
@@ -111,6 +124,7 @@ const Dashboard: React.FC = () => {
         <Row>
           <Col md={4}>
             <ServerList selectedIds={selectedServerIds} setSelectedIds={setSelectedServerIds} />
+            <ServerStats servers={serverList} />
           </Col>
           <Col md={8}>
             <MapManager selectedServerIds={selectedServerIds} onChangeMap={handleChangeMap} />

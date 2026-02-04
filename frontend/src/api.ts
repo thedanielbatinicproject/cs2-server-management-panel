@@ -52,6 +52,10 @@ export const servers = {
   ) => api.post<BulkExecuteResponse>('/servers/bulk/execute', { serverIds, commands, ...opts }),
   bulkChangeMap: (serverIds: string[], map: string, workshopId?: string | null, serverCommands?: string[]) =>
     api.post<BulkExecuteResponse>('/servers/bulk/change-map', { serverIds, map, workshopId, serverCommands }),
+  // New status endpoints
+  getStatus: (id: string) => api.get(`/servers/${id}/status`),
+  ping: (id: string) => api.get(`/servers/${id}/ping`),
+  pingAll: () => api.post<{ results: { serverId: string; online: boolean; ping: number | null }[] }>('/servers/ping-all'),
 };
 
 export const maps = {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, ListGroup, Form, Button, Modal, Alert, Badge } from 'react-bootstrap';
+import { Card, ListGroup, Form, Button, Modal, Alert, Badge, Spinner } from 'react-bootstrap';
 import { servers as serversApi } from '../api';
 import { Server } from '../types';
 
@@ -8,12 +8,20 @@ interface ServerListProps {
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
+interface ServerPingStatus {
+  [serverId: string]: { online: boolean; ping: number | null; loading?: boolean };
+}
+
+const SESSION_KEY = 'cs2rcon_selected_servers';
+
 const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) => {
   const [servers, setServers] = useState<Server[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editServer, setEditServer] = useState<Server | null>(null);
   const [form, setForm] = useState({ name: '', host: '', port: 27015, password: '' });
   const [error, setError] = useState('');
+  const [pingStatus, setPingStatus] = useState<ServerPingStatus>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
     try {
@@ -24,9 +32,24 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
     }
   };
 
+  // Load servers and restore selection from session
   useEffect(() => {
     load();
-  }, []);
+    const saved = sessionStorage.getItem(SESSION_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSelectedIds(parsed);
+        }
+      } catch (e) {}
+    }
+  }, [setSelectedIds]);
+
+  // Save selection to session
+  useEffect(() => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(selectedIds));
+  }, [selectedIds]);
 
   const handleToggle = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -35,6 +58,28 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
   const handleSelectAll = () => {
     if (selectedIds.length === servers.length) setSelectedIds([]);
     else setSelectedIds(servers.map((s) => s.id));
+  };
+
+  const handleRefreshAll = async () => {
+    setRefreshing(true);
+    // Set all to loading
+    const loadingStatus: ServerPingStatus = {};
+    servers.forEach(s => {
+      loadingStatus[s.id] = { online: false, ping: null, loading: true };
+    });
+    setPingStatus(loadingStatus);
+
+    try {
+      const res = await serversApi.pingAll();
+      const newStatus: ServerPingStatus = {};
+      res.data.results.forEach(r => {
+        newStatus[r.serverId] = { online: r.online, ping: r.ping };
+      });
+      setPingStatus(newStatus);
+    } catch (e) {
+      setError('Failed to refresh server status');
+    }
+    setRefreshing(false);
   };
 
   const openAdd = () => {
@@ -68,11 +113,40 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
     load();
   };
 
+  const getStatusBadge = (serverId: string) => {
+    const status = pingStatus[serverId];
+    if (!status) return null;
+    if (status.loading) {
+      return <Spinner animation="border" size="sm" className="ms-2" />;
+    }
+    if (status.online) {
+      return (
+        <Badge bg="success" className="ms-2">
+          🟢 {status.ping}ms
+        </Badge>
+      );
+    }
+    return <Badge bg="danger" className="ms-2">🔴 Offline</Badge>;
+  };
+
   return (
     <Card className="mb-3">
       <Card.Header className="d-flex justify-content-between align-items-center">
         <span>Servers</span>
         <div>
+          <Button 
+            size="sm" 
+            variant="outline-info" 
+            className="me-2" 
+            onClick={handleRefreshAll}
+            disabled={refreshing || servers.length === 0}
+          >
+            {refreshing ? (
+              <><Spinner size="sm" animation="border" /> Checking...</>
+            ) : (
+              '🔄 Check Status'
+            )}
+          </Button>
           <Button size="sm" variant="outline-secondary" className="me-2" onClick={handleSelectAll}>
             {selectedIds.length === servers.length ? 'Deselect All' : 'Select All'}
           </Button>
@@ -82,7 +156,7 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
         </div>
       </Card.Header>
       {error && (
-        <Alert variant="danger" className="m-2">
+        <Alert variant="danger" className="m-2" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
       )}
@@ -100,6 +174,7 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
               <Badge bg="secondary">
                 {s.host}:{s.port}
               </Badge>
+              {getStatusBadge(s.id)}
             </span>
             <Button size="sm" variant="outline-primary" className="me-1" onClick={() => openEdit(s)}>
               Edit

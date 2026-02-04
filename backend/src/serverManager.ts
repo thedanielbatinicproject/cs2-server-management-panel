@@ -24,24 +24,33 @@ function sleep(ms: number): Promise<void> {
 
 function getServerConfig(id: string): Server | undefined {
   const list = servers.get('servers') || [];
+  console.log(`[Queue] Looking for server ${id}, found ${list.length} servers`);
   return list.find((s) => s.id === id);
 }
 
 async function processQueue(id: string): Promise<void> {
   const q = queues.get(id);
-  if (!q || q.processing) return;
+  if (!q || q.processing) {
+    console.log(`[Queue] processQueue(${id}): skipped (no queue or already processing)`);
+    return;
+  }
   q.processing = true;
+  console.log(`[Queue] processQueue(${id}): starting`);
 
   const cfg = getServerConfig(id);
   if (!cfg) {
+    console.log(`[Queue] Server ${id} not found!`);
     q.processing = false;
     return;
   }
+  console.log(`[Queue] Server config: ${cfg.host}:${cfg.port}`);
 
   const client = new RconClient(cfg.host, cfg.port, cfg.password);
   try {
     await client.connect();
+    console.log(`[Queue] Connected to RCON`);
   } catch (e) {
+    console.error(`[Queue] RCON connect failed:`, e);
     q.rejectAll(new Error('RCON connect failed: ' + e));
     queues.delete(id);
     return;
@@ -49,11 +58,14 @@ async function processQueue(id: string): Promise<void> {
 
   while (q.items.length > 0) {
     const job = q.items.shift()!;
+    console.log(`[Queue] Processing job with ${job.commands.length} commands`);
     const results: CommandResult[] = [];
     let failed = false;
 
     for (const line of job.commands) {
+      console.log(`[Queue] Sending: ${line}`);
       const r = await client.send(line);
+      console.log(`[Queue] Result: ok=${r.ok}`);
       results.push(r);
       if (!r.ok) {
         failed = true;
@@ -63,6 +75,7 @@ async function processQueue(id: string): Promise<void> {
     }
 
     job.resolve({ results, failed });
+    console.log(`[Queue] Job completed`);
   }
 
   try {
