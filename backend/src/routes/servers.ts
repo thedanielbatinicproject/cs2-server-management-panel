@@ -1,10 +1,32 @@
 import express, { Request, Response } from 'express';
-import { servers } from '../db';
+import { servers, maps } from '../db';
 import { enqueueCommands } from '../serverManager';
-import { Server, BulkResult } from '../types';
+import { Server, BulkResult, GameMap } from '../types';
 import RconClient from '../rconClient';
 
 const router = express.Router();
+
+// Find map name from database by workshopId or map code
+function findMapFromDatabase(rawMap: string, workshopId: string | null): { name: string; workshopId: string | null } | null {
+  const mapsList: GameMap[] = maps.get('maps') || [];
+  
+  // First try to match by workshop ID
+  if (workshopId) {
+    const byWorkshop = mapsList.find(m => m.workshopId === workshopId);
+    if (byWorkshop) return { name: byWorkshop.name, workshopId: byWorkshop.workshopId };
+  }
+  
+  // Try to match by map code name (e.g., de_mirage, aim_ancient)
+  const mapCode = rawMap.split('/').pop() || rawMap;
+  const byName = mapsList.find(m => 
+    m.name.toLowerCase() === mapCode.toLowerCase() ||
+    m.name.toLowerCase().replace(/\s+/g, '_') === mapCode.toLowerCase() ||
+    mapCode.toLowerCase().includes(m.name.toLowerCase().replace(/\s+/g, '_'))
+  );
+  if (byName) return { name: byName.name, workshopId: byName.workshopId };
+  
+  return null;
+}
 
 // Parse status command output
 function parseStatus(output: string): any {
@@ -13,6 +35,7 @@ function parseStatus(output: string): any {
     hostname: '',
     map: '',
     mapWorkshopId: null,
+    mapDisplayName: null,
     players: { current: 0, max: 0, bots: 0 },
     playerList: [],
     version: '',
@@ -22,20 +45,23 @@ function parseStatus(output: string): any {
   };
 
   for (const line of lines) {
-    if (line.startsWith('hostname')) {
-      result.hostname = line.split(':').slice(1).join(':').trim();
+    if (line.includes('hostname')) {
+      const match = line.match(/hostname\s*:\s*(.+)/);
+      if (match) result.hostname = match[1].trim();
     }
-    else if (line.startsWith('udp/ip')) {
+    else if (line.includes('udp/ip')) {
       const match = line.match(/public ([^)]+)/);
       if (match) result.ip = match[1];
     }
-    else if (line.startsWith('version')) {
-      result.version = line.split(':').slice(1).join(':').trim();
+    else if (line.includes('version') && line.includes(':')) {
+      const match = line.match(/version\s*:\s*([^\s]+)/);
+      if (match) result.version = match[1];
     }
-    else if (line.startsWith('steamid')) {
-      result.steamId = line.split(':').slice(1).join(':').trim();
+    else if (line.includes('steamid')) {
+      const match = line.match(/steamid\s*:\s*(.+)/);
+      if (match) result.steamId = match[1].trim();
     }
-    else if (line.startsWith('players')) {
+    else if (line.includes('players') && line.includes('humans')) {
       const match = line.match(/(\d+) humans?, (\d+) bots? \((\d+) max\)/);
       if (match) {
         result.players.current = parseInt(match[1], 10);
@@ -44,26 +70,64 @@ function parseStatus(output: string): any {
       }
       result.hibernating = line.includes('hibernating') && !line.includes('not hibernating');
     }
-    else if (line.includes('loaded spawngroup')) {
-      const match = line.match(/\[\d+: ([^\s|]+)/);
-      if (match) result.map = match[1];
-      const wsMatch = line.match(/workshop[\/\\](\d+)/i);
-      if (wsMatch) result.mapWorkshopId = wsMatch[1];
-    }
-    else if (/^\s*\d+\s+\d+:\d+/.test(line.trim())) {
-      const match = line.match(/^\s*(\d+)\s+(\d+:\d+)\s+(\d+)\s+(\d+)\s+(\w+)\s+\d+\s+([^\s]+)\s+'([^']+)'/);
+    // Parse spawngroup 1 ONLY - this is the actual map
+    // Format: "loaded spawngroup(  1)  : SV:  [1: de_nuke | main lump | mapload]"
+    else if (line.includes('loaded spawngroup') && line.includes('(  1)')) {
+      // Match pattern: [1: mapname | ...]
+      const match = line.match(/\[1:\s*([^\s|]+)/);
       if (match) {
-        result.playerList.push({
-          id: match[1],
-          time: match[2],
-          ping: parseInt(match[3], 10),
-          loss: parseInt(match[4], 10),
-          state: match[5],
-          address: match[6],
-          name: match[7],
-        });
+        result.map = match[1];
+        
+        // Check if it's a workshop map
+        const wsMatch = match[1].match(/workshop[\/\\](\d+)/i);
+        if (wsMatch) {
+          result.mapWorkshopId = wsMatch[1];
+        }
       }
     }
+    // Parse player lines - format: "[Client] 65280    03:21   25    0     active 786432 'RegentLujo'"
+    // Only parse HUMAN players (has time like 03:21, not BOT or [NoChan])
+    else if (line.includes("'") && !line.includes('BOT') && !line.includes('[NoChan]') && !line.includes('name')) {
+      // Look for pattern: time (MM:SS), then eventually 'playername'
+      const timeMatch = line.match(/(\d+:\d+)/);
+      const nameMatch = line.match(/'([^']+)'/);
+      
+      if (timeMatch && nameMatch && nameMatch[1].trim() !== '') {
+        // Extract all numbers before the name
+        const parts = line.split(timeMatch[0]);
+        if (parts.length >= 2) {
+          const afterTime = parts[1];
+          const numbers = afterTime.match(/(\d+)/g);
+          
+          if (numbers && numbers.length >= 3) {
+            result.playerList.push({
+              id: '0',
+              time: timeMatch[1],
+              ping: parseInt(numbers[0], 10),
+              loss: parseInt(numbers[1], 10),
+              state: 'active',
+              name: nameMatch[1],
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Look up map name from database
+  const mapInfo = findMapFromDatabase(result.map, result.mapWorkshopId);
+  if (mapInfo) {
+    result.mapDisplayName = mapInfo.name;
+    if (!result.mapWorkshopId && mapInfo.workshopId) {
+      result.mapWorkshopId = mapInfo.workshopId;
+    }
+  } else {
+    // Fallback: clean up the raw map name (remove paths like workshop/123/)
+    let cleanName = result.map;
+    if (cleanName.includes('/')) {
+      cleanName = cleanName.split('/').pop() || cleanName;
+    }
+    result.mapDisplayName = cleanName;
   }
 
   return result;

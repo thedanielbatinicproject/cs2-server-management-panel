@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Form, Table, Badge, Spinner, Button } from 'react-bootstrap';
-import { servers as serversApi } from '../api';
-import { Server } from '../types';
+import { servers as serversApi, maps as mapsApi } from '../api';
+import { Server, GameMap } from '../types';
 
 interface ServerStatsProps {
   servers: Server[];
@@ -15,6 +15,10 @@ interface PlayerInfo {
   time: string;
   state: string;
   address: string;
+  kills?: number;
+  deaths?: number;
+  assists?: number;
+  score?: number;
 }
 
 interface ServerStatus {
@@ -24,6 +28,7 @@ interface ServerStatus {
     hostname: string;
     map: string;
     mapWorkshopId: string | null;
+    mapDisplayName: string | null;
     players: { current: number; max: number; bots: number };
     playerList: PlayerInfo[];
     version: string;
@@ -45,6 +50,18 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [mapsList, setMapsList] = useState<GameMap[]>([]);
+
+  // Load maps for name lookup
+  useEffect(() => {
+    const loadMaps = async () => {
+      try {
+        const res = await mapsApi.list();
+        setMapsList(res.data);
+      } catch (e) {}
+    };
+    loadMaps();
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     if (!selectedServerId) return;
@@ -94,10 +111,55 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
 
   const selectedServer = servers.find(s => s.id === selectedServerId);
 
+  // Find map in our database by workshopId or name
+  const findMapInfo = (rawMap: string, workshopId: string | null): { name: string; workshopId: string | null } | null => {
+    // First try to match by workshop ID
+    if (workshopId) {
+      const byWorkshop = mapsList.find(m => m.workshopId === workshopId);
+      if (byWorkshop) return { name: byWorkshop.name, workshopId: byWorkshop.workshopId };
+    }
+    
+    // Try to match by map code name (e.g., de_mirage, aim_ancient)
+    const mapCode = rawMap.split('/').pop() || rawMap;
+    const byName = mapsList.find(m => 
+      m.name.toLowerCase().includes(mapCode.toLowerCase()) ||
+      mapCode.toLowerCase().includes(m.name.toLowerCase().replace(/\s+/g, '_'))
+    );
+    if (byName) return { name: byName.name, workshopId: byName.workshopId };
+    
+    return null;
+  };
+
+  const getMapDisplay = () => {
+    if (!status?.status) return { displayName: 'Unknown', workshopId: null, rawName: null };
+    
+    const rawMap = status.status.map;
+    const wsId = status.status.mapWorkshopId;
+    
+    // Backend provides mapDisplayName which is looked up from the maps database
+    if (status.status.mapDisplayName) {
+      return { 
+        displayName: status.status.mapDisplayName, 
+        workshopId: wsId, 
+        rawName: rawMap !== status.status.mapDisplayName ? rawMap : null 
+      };
+    }
+    
+    // Frontend fallback: try to find in our local maps list
+    const mapInfo = findMapInfo(rawMap, wsId);
+    if (mapInfo) {
+      return { displayName: mapInfo.name, workshopId: mapInfo.workshopId || wsId, rawName: rawMap };
+    }
+    
+    // Final fallback: clean up the raw map name
+    const cleanName = rawMap.split('/').pop() || rawMap;
+    return { displayName: cleanName, workshopId: wsId, rawName: rawMap !== cleanName ? rawMap : null };
+  };
+
   return (
     <Card className="mb-3">
       <Card.Header className="d-flex justify-content-between align-items-center">
-        <span>📊 Server Stats</span>
+        <span>Server Stats</span>
         <div className="d-flex align-items-center gap-2">
           <Form.Check
             type="switch"
@@ -113,7 +175,7 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
             onClick={fetchStatus}
             disabled={!selectedServerId || loading}
           >
-            {loading ? <Spinner size="sm" animation="border" /> : '🔄 Refresh'}
+            {loading ? <Spinner size="sm" animation="border" /> : 'Refresh'}
           </Button>
         </div>
       </Card.Header>
@@ -160,10 +222,22 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
                     <tr>
                       <td><strong>Current Map</strong></td>
                       <td>
-                        {status.status.map || 'Unknown'}
-                        {status.status.mapWorkshopId && (
-                          <Badge bg="info" className="ms-2">WS: {status.status.mapWorkshopId}</Badge>
-                        )}
+                        {(() => {
+                          const mapDisplay = getMapDisplay();
+                          return (
+                            <>
+                              <strong>{mapDisplay.displayName}</strong>
+                              {mapDisplay.workshopId && (
+                                <Badge bg="info" className="ms-2">
+                                  Workshop: {mapDisplay.workshopId}
+                                </Badge>
+                              )}
+                              {mapDisplay.rawName && mapDisplay.rawName !== mapDisplay.displayName && (
+                                <small className="text-muted ms-2">({mapDisplay.rawName})</small>
+                              )}
+                            </>
+                          );
+                        })()}
                       </td>
                     </tr>
                     <tr>
@@ -195,32 +269,35 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
                       <thead>
                         <tr>
                           <th>Name</th>
+                          <th>Score</th>
+                          <th>K</th>
+                          <th>D</th>
+                          <th>A</th>
                           <th>Ping</th>
-                          <th>Loss</th>
                           <th>Time</th>
-                          <th>State</th>
                         </tr>
                       </thead>
                       <tbody>
                         {status.status.playerList.map((p, i) => (
                           <tr key={i}>
                             <td>{p.name}</td>
+                            <td className="text-muted">-</td>
+                            <td className="text-muted">-</td>
+                            <td className="text-muted">-</td>
+                            <td className="text-muted">-</td>
                             <td>
                               <Badge bg={p.ping < 50 ? 'success' : p.ping < 100 ? 'warning' : 'danger'}>
                                 {p.ping}ms
                               </Badge>
                             </td>
-                            <td>{p.loss}%</td>
                             <td>{p.time}</td>
-                            <td>
-                              <Badge bg={p.state === 'active' ? 'success' : 'secondary'}>
-                                {p.state}
-                              </Badge>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </Table>
+                    <small className="text-muted">
+                      Note: Score/K/D/A stats require a CounterStrikeSharp plugin (e.g., K4-System).
+                    </small>
                   </>
                 ) : (
                   <div className="text-muted text-center py-3">

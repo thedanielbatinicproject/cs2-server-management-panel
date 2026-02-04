@@ -42,30 +42,31 @@ const Dashboard: React.FC = () => {
     setActionResult(null);
     try {
       const res = await serversApi.bulkChangeMap(selectedServerIds, mapName, workshopId, serverCommands);
+      const mapInfo = workshopId ? `${mapName} (Workshop: ${workshopId})` : mapName;
       setActionResult({
         type: 'success',
-        message: `Map changed on ${res.data.results.length} server(s)`,
+        message: `Map changed to "${mapInfo}" on ${res.data.results.length} server(s)`,
         details: res.data.results,
       });
     } catch (e: any) {
-      setActionResult({ type: 'danger', message: e.response?.data?.error || 'Failed to change map' });
+      setActionResult({ type: 'danger', message: `Failed to change map: ${e.response?.data?.error || 'Unknown error'}` });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExecutePrompt = async (lines: string[]) => {
+  const handleExecutePrompt = async (lines: string[], promptName: string) => {
     setLoading(true);
     setActionResult(null);
     try {
       const res = await serversApi.bulkExecute(selectedServerIds, lines, { delay: 200, stopOnFail: false });
       setActionResult({
         type: 'success',
-        message: `Executed on ${res.data.results.length} server(s)`,
+        message: `Prompt "${promptName}" executed on ${res.data.results.length} server(s) (${lines.length} commands)`,
         details: res.data.results,
       });
     } catch (e: any) {
-      setActionResult({ type: 'danger', message: e.response?.data?.error || 'Failed to execute' });
+      setActionResult({ type: 'danger', message: `Failed to execute prompt "${promptName}": ${e.response?.data?.error || 'Unknown error'}` });
     } finally {
       setLoading(false);
     }
@@ -74,6 +75,12 @@ const Dashboard: React.FC = () => {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  // Helper function to get server name by ID
+  const getServerName = (serverId: string): string => {
+    const server = serverList.find(s => s.id === serverId);
+    return server ? server.name : `Server ${serverId}`;
   };
 
   return (
@@ -114,7 +121,7 @@ const Dashboard: React.FC = () => {
               <ul className="mb-0 mt-2 small">
                 {actionResult.details.map((d, i) => (
                   <li key={i}>
-                    Server {d.serverId}: {d.error || (d.failed ? 'Partial' : 'OK')}
+                    <strong>{getServerName(d.serverId)}</strong>: {d.error || (d.failed ? 'Partial' : 'OK')}
                   </li>
                 ))}
               </ul>

@@ -6,7 +6,7 @@ import { useAuth } from '../App';
 
 interface PromptManagerProps {
   selectedServerIds: string[];
-  onExecute: (lines: string[]) => void;
+  onExecute: (lines: string[], promptName: string) => void;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -92,7 +92,7 @@ const PromptManager: React.FC<PromptManagerProps> = ({ selectedServerIds, onExec
       alert('Select at least one server');
       return;
     }
-    onExecute(p.lines);
+    onExecute(p.lines, p.name);
   };
 
   return (

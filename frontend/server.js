@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
@@ -10,6 +11,9 @@ const API_URL = process.env.API_URL || 'http://127.0.0.1:3001';
 app.use('/api', createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Proxy] ${req.method} ${req.originalUrl} -> ${API_URL}${req.originalUrl}`);
+  }
 }));
 
 // Serve static files

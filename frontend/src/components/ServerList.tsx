@@ -122,11 +122,11 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
     if (status.online) {
       return (
         <Badge bg="success" className="ms-2">
-          🟢 {status.ping}ms
+          Online - {status.ping}ms
         </Badge>
       );
     }
-    return <Badge bg="danger" className="ms-2">🔴 Offline</Badge>;
+    return <Badge bg="danger" className="ms-2">Offline</Badge>;
   };
 
   return (
@@ -144,7 +144,7 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
             {refreshing ? (
               <><Spinner size="sm" animation="border" /> Checking...</>
             ) : (
-              '🔄 Check Status'
+              'Check Status'
             )}
           </Button>
           <Button size="sm" variant="outline-secondary" className="me-2" onClick={handleSelectAll}>

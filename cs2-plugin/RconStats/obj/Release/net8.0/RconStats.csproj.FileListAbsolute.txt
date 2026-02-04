@@ -1,0 +1,12 @@
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\bin\Release\net8.0\RconStats.deps.json
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\bin\Release\net8.0\RconStats.dll
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\bin\Release\net8.0\RconStats.pdb
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.csproj.AssemblyReference.cache
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.AssemblyInfoInputs.cache
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.AssemblyInfo.cs
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.csproj.CoreCompileInputs.cache
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.dll
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\refint\RconStats.dll
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\RconStats.pdb
+C:\Users\danie\Documents\Projects\CS2-RCON\cs2-plugin\RconStats\obj\Release\net8.0\ref\RconStats.dll
