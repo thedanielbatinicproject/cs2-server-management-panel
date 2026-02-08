@@ -28,6 +28,30 @@ function findMapFromDatabase(rawMap: string, workshopId: string | null): { name:
   return null;
 }
 
+// Parse css_playerstats output from RconStats plugin
+// Format: "PLAYER|SteamID|Name|Kills|Deaths|Assists|Score"
+function parsePlayerStats(output: string): Map<string, { kills: number; deaths: number; assists: number; score: number }> {
+  const stats = new Map<string, { kills: number; deaths: number; assists: number; score: number }>();
+  const lines = output.split('\n');
+  
+  for (const line of lines) {
+    if (line.startsWith('PLAYER|')) {
+      const parts = line.split('|');
+      if (parts.length >= 7) {
+        const name = parts[2];
+        stats.set(name, {
+          kills: parseInt(parts[3], 10) || 0,
+          deaths: parseInt(parts[4], 10) || 0,
+          assists: parseInt(parts[5], 10) || 0,
+          score: parseInt(parts[6], 10) || 0,
+        });
+      }
+    }
+  }
+  
+  return stats;
+}
+
 // Parse status command output
 function parseStatus(output: string): any {
   const lines = output.split('\n');
@@ -254,6 +278,28 @@ router.get('/:id/status', async (req: Request, res: Response) => {
     
     const statusResult = await client.send('status');
     const status = statusResult.ok ? parseStatus(statusResult.res || '') : null;
+    
+    // Try to get K/D/A stats from RconStats plugin
+    if (status && status.playerList.length > 0) {
+      try {
+        const statsResult = await client.send('css_playerstats');
+        if (statsResult.ok && statsResult.res) {
+          const playerStats = parsePlayerStats(statsResult.res);
+          // Merge stats into playerList
+          for (const player of status.playerList) {
+            const stats = playerStats.get(player.name);
+            if (stats) {
+              player.kills = stats.kills;
+              player.deaths = stats.deaths;
+              player.assists = stats.assists;
+              player.score = stats.score;
+            }
+          }
+        }
+      } catch (e) {
+        // Plugin not installed or command failed - ignore
+      }
+    }
     
     let teamScores = { ct: 0, t: 0 };
     

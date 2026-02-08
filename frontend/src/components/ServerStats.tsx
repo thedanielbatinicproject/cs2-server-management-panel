@@ -281,10 +281,10 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
                         {status.status.playerList.map((p, i) => (
                           <tr key={i}>
                             <td>{p.name}</td>
-                            <td className="text-muted">-</td>
-                            <td className="text-muted">-</td>
-                            <td className="text-muted">-</td>
-                            <td className="text-muted">-</td>
+                            <td>{p.score !== undefined ? p.score : <span className="text-muted">-</span>}</td>
+                            <td>{p.kills !== undefined ? p.kills : <span className="text-muted">-</span>}</td>
+                            <td>{p.deaths !== undefined ? p.deaths : <span className="text-muted">-</span>}</td>
+                            <td>{p.assists !== undefined ? p.assists : <span className="text-muted">-</span>}</td>
                             <td>
                               <Badge bg={p.ping < 50 ? 'success' : p.ping < 100 ? 'warning' : 'danger'}>
                                 {p.ping}ms
@@ -295,9 +295,11 @@ const ServerStats: React.FC<ServerStatsProps> = ({ servers }) => {
                         ))}
                       </tbody>
                     </Table>
-                    <small className="text-muted">
-                      Note: Score/K/D/A stats require a CounterStrikeSharp plugin (e.g., K4-System).
-                    </small>
+                    {status.status.playerList.some(p => p.kills === undefined) && (
+                      <small className="text-muted">
+                        Install RconStats plugin for K/D/A stats.
+                      </small>
+                    )}
                   </>
                 ) : (
                   <div className="text-muted text-center py-3">

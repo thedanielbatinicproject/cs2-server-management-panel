@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, ListGroup, Form, Button, Modal, Alert, Badge, Spinner } from 'react-bootstrap';
 import { servers as serversApi } from '../api';
 import { Server } from '../types';
+import { useAuth } from '../App';
 
 interface ServerListProps {
   selectedIds: string[];
@@ -15,6 +16,7 @@ interface ServerPingStatus {
 const SESSION_KEY = 'cs2rcon_selected_servers';
 
 const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) => {
+  const { user } = useAuth();
   const [servers, setServers] = useState<Server[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editServer, setEditServer] = useState<Server | null>(null);
@@ -22,6 +24,9 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
   const [error, setError] = useState('');
   const [pingStatus, setPingStatus] = useState<ServerPingStatus>({});
   const [refreshing, setRefreshing] = useState(false);
+
+  // Viewers cannot add/edit/delete servers
+  const canEdit = user && user.role !== 'viewer';
 
   const load = async () => {
     try {
@@ -150,9 +155,11 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
           <Button size="sm" variant="outline-secondary" className="me-2" onClick={handleSelectAll}>
             {selectedIds.length === servers.length ? 'Deselect All' : 'Select All'}
           </Button>
-          <Button size="sm" variant="primary" onClick={openAdd}>
-            + Add
-          </Button>
+          {canEdit && (
+            <Button size="sm" variant="primary" onClick={openAdd}>
+              + Add
+            </Button>
+          )}
         </div>
       </Card.Header>
       {error && (
@@ -176,12 +183,16 @@ const ServerList: React.FC<ServerListProps> = ({ selectedIds, setSelectedIds }) 
               </Badge>
               {getStatusBadge(s.id)}
             </span>
-            <Button size="sm" variant="outline-primary" className="me-1" onClick={() => openEdit(s)}>
-              Edit
-            </Button>
-            <Button size="sm" variant="outline-danger" onClick={() => handleDelete(s.id)}>
-              Del
-            </Button>
+            {canEdit && (
+              <>
+                <Button size="sm" variant="outline-primary" className="me-1" onClick={() => openEdit(s)}>
+                  Edit
+                </Button>
+                <Button size="sm" variant="outline-danger" onClick={() => handleDelete(s.id)}>
+                  Del
+                </Button>
+              </>
+            )}
           </ListGroup.Item>
         ))}
         {servers.length === 0 && (

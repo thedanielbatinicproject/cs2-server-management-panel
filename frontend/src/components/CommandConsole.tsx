@@ -2,16 +2,21 @@ import React, { useState } from 'react';
 import { Card, Form, Button, Alert, ListGroup, Spinner, Badge } from 'react-bootstrap';
 import { servers as serversApi } from '../api';
 import { BulkResult } from '../types';
+import { useAuth } from '../App';
 
 interface CommandConsoleProps {
   selectedServerIds: string[];
 }
 
 const CommandConsole: React.FC<CommandConsoleProps> = ({ selectedServerIds }) => {
+  const { user } = useAuth();
   const [commands, setCommands] = useState('');
   const [results, setResults] = useState<BulkResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Viewers cannot execute commands
+  const canExecute = user && user.role !== 'viewer';
 
   const handleExecute = async () => {
     if (selectedServerIds.length === 0) {
@@ -54,7 +59,7 @@ const CommandConsole: React.FC<CommandConsoleProps> = ({ selectedServerIds }) =>
             placeholder="say Hello"
           />
         </Form.Group>
-        <Button variant="primary" onClick={handleExecute} disabled={loading}>
+        <Button variant="primary" onClick={handleExecute} disabled={loading || !canExecute}>
           {loading ? (
             <>
               <Spinner size="sm" className="me-1" />
@@ -64,7 +69,10 @@ const CommandConsole: React.FC<CommandConsoleProps> = ({ selectedServerIds }) =>
             'Execute'
           )}
         </Button>
-        <small className="text-muted ms-2">{selectedServerIds.length} server(s) selected</small>
+        <small className="text-muted ms-2">
+          {selectedServerIds.length} server(s) selected
+          {!canExecute && ' (Viewers cannot execute commands)'}
+        </small>
       </Card.Body>
       {results.length > 0 && (
         <ListGroup variant="flush">
